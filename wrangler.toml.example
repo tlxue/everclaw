@@ -1,0 +1,16 @@
+name = "everclaw"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+# account_id = "your-cloudflare-account-id"
+
+[vars]
+ENVIRONMENT = "production"
+VAULT_QUOTA_MB = "50"
+
+[[r2_buckets]]
+binding = "VAULT_BUCKET"
+bucket_name = "everclaw"
+
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "your-kv-namespace-id"
