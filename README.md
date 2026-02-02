@@ -1,11 +1,11 @@
 # Everclaw
 
-Encrypted cloud memory for AI agents. Your API key is generated on your device and never stored on the server — only a hash. Everything your agent saves is AES-256-GCM encrypted before it's stored. No one can read it, not even the server operator.
+Encrypted cloud memory for AI agents. Your API key is generated on your device and never stored on the server — only a SHA-256 hash. Everything your agent saves is AES-256-GCM encrypted at rest in R2.
 
 ## Features
 
-- **End-to-end encryption** — AES-256-GCM with client-derived keys; the server never sees plaintext
-- **Zero-knowledge auth** — API keys are generated locally; the server only stores a SHA-256 hash
+- **Server-side encryption at rest** — AES-256-GCM; the server encrypts data before writing to R2
+- **Hashed auth** — API keys are generated locally; the server only stores a SHA-256 hash
 - **One key, full recovery** — switch devices, reinstall, enter your API key, and all your memory is back
 - **Nested file paths** — store any file structure (`memory/2026-02-02.md`, `config/prefs.json`, etc.)
 - **Storage quotas** — configurable per-vault limits (default 50 MB) with usage tracking
@@ -46,15 +46,21 @@ All requests require `Authorization: Bearer <API_KEY>`.
 
 ## Security model
 
-Everclaw uses a zero-knowledge architecture:
+Everclaw uses server-side encryption at rest:
 
 1. **Key generation** — The client generates a random 64-character hex API key (`ec-<hex>`)
-2. **Key derivation** — HKDF is used to derive separate encryption and auth keys from the API key
-3. **Encryption** — All file contents are encrypted with AES-256-GCM before storage in R2
-4. **Auth** — The server stores only a SHA-256 hash of the API key in KV; the raw key never touches disk
-5. **Storage** — File paths are hashed before use as R2 object keys; the server cannot enumerate your filenames
+2. **Key derivation** — HKDF derives an encryption key from the API key; this happens in Worker memory
+3. **Encryption** — All file contents are encrypted with AES-256-GCM before writing to R2
+4. **Auth** — The server stores only a SHA-256 hash of the API key in KV; the raw key is not persisted
+5. **Storage** — File paths are stored as-is in R2 object keys; operators with R2 access can see filenames
 
 If you lose your API key, your data is unrecoverable. There is no password reset.
+
+### Trust model
+
+- Plaintext exists transiently in Worker memory during request processing. You must trust the server operator, or self-host.
+- Storage paths are **not** obfuscated — R2 object keys contain the original filenames.
+- Quota enforcement and provision rate limiting use non-atomic KV counters. Concurrent requests can theoretically race past limits, but each vault is single-user so this is unlikely in practice. Self-hosters can adjust `VAULT_QUOTA_MB` if concerned.
 
 ## Development
 

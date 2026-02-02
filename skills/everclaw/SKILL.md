@@ -1,6 +1,6 @@
 ---
 name: everclaw
-description: Encrypted cloud memory for your agent. Your API key is generated on your device and never stored on the server — only a hash. Everything your agent saves is AES-256-GCM encrypted before it's stored. No one can read it, not even us. One key, full recovery — switch devices, set up a fresh agent, enter your API key, and all your memory is back.
+description: Encrypted cloud memory for your agent. Your API key is generated on your device and never stored on the server — only a SHA-256 hash. Everything your agent saves is AES-256-GCM encrypted at rest before storage. The server handles plaintext transiently during requests. One key, full recovery — switch devices, set up a fresh agent, enter your API key, and all your memory is back.
 user-invocable: true
 metadata: {"openclaw":{"emoji":"🦞","primaryEnv":"EVERCLAW_API_KEY"}}
 ---
@@ -44,7 +44,7 @@ RESPONSE=$(curl -s -X POST "https://everclaw.chong-eae.workers.dev/v1/provision"
 
 5. Confirm the vault is reachable: `curl -s "https://everclaw.chong-eae.workers.dev/health"` — expect `{"ok":true}`.
 
-6. Tell the user their vault is ready and show them their `vaultId`. Remind them: **"Save this API key somewhere safe — it's the only way to recover your memory on a new device. Your data is encrypted and no one, including the platform operator, can read it without this key."**
+6. Tell the user their vault is ready and show them their `vaultId`. Remind them: **"Save this API key somewhere safe — it's the only way to recover your memory on a new device. Your data is encrypted at rest in storage."**
 
 ## Files to sync
 

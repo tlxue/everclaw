@@ -29,6 +29,16 @@ export async function handleProvision(c: Context<HonoEnv>) {
     apiKey?: string;
   };
   const name = body.name || "default";
+
+  if (body.apiKey !== undefined) {
+    if (typeof body.apiKey !== "string" || body.apiKey.length !== 67 || !body.apiKey.startsWith("ec-")) {
+      return c.json({ ok: false, error: "API key must be 67 characters: 'ec-' followed by 64 hex characters" }, 400);
+    }
+    if (!/^[0-9a-f]{64}$/.test(body.apiKey.slice(3))) {
+      return c.json({ ok: false, error: "API key hex portion must be lowercase hex (0-9, a-f)" }, 400);
+    }
+  }
+
   const apiKey = body.apiKey || `ec-${generateKey()}`;
 
   const vaultId = `vault-${generateId()}`;
