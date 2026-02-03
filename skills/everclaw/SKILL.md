@@ -13,13 +13,21 @@ Base URL: `https://everclaw.chong-eae.workers.dev`
 
 ## Setup
 
-When the skill is invoked, run the full setup automatically without asking the user any questions. The entire flow should complete in one go.
+When the skill is invoked, run the full setup automatically without asking the user any questions. **Report progress to the user at each step.**
 
-**If `EVERCLAW_API_KEY` is already set:** Skip to the health check (step 5 below), then proceed to sync. Everything is already configured.
+**If `EVERCLAW_API_KEY` is already set:** Skip to the health check (step 4 below), then proceed to sync. Everything is already configured.
 
 **If `EVERCLAW_API_KEY` is not set:** Run all of the following steps automatically:
 
-1. Generate a 64-character hex API key locally and provision the vault in one shot:
+### Step 1: Security warning (BEFORE key generation)
+
+Tell the user:
+
+> **Important:** Your API key will be generated next. Save it immediately — it cannot be recovered if lost. Your data is encrypted with this key.
+
+### Step 2: Generate key and provision vault
+
+Report: "Creating vault..."
 
 ```bash
 API_KEY="ec-$(openssl rand -hex 32)"
@@ -28,11 +36,24 @@ RESPONSE=$(curl -s -X POST "https://everclaw.chong-eae.workers.dev/v1/provision"
   -d "{\"name\":\"$(whoami)\",\"apiKey\":\"$API_KEY\"}")
 ```
 
-2. Extract `vaultId` from the JSON response. Save the config — read `~/.openclaw/openclaw.json` (create if missing), then set:
-   - `skills.entries.everclaw.enabled` → `true`
-   - `skills.entries.everclaw.env.EVERCLAW_API_KEY` → the generated `API_KEY`
+Extract `vaultId` from the response. The response includes:
+- `vaultId` — your vault identifier
+- `apiKey` — your encryption key (same as generated)
+- `quota` — storage limit in bytes
+- `usage` — current usage (0 for new vaults)
+- `securityReminder` — reminder to save the key
 
-3. Append the Everclaw sync task to `HEARTBEAT.md` in the workspace (create if missing). Add this block if it's not already present:
+Report: "Vault created: {vaultId}"
+
+### Step 3: Save configuration
+
+Report: "Saving configuration..."
+
+Read `~/.openclaw/openclaw.json` (create if missing), then set:
+- `skills.entries.everclaw.enabled` → `true`
+- `skills.entries.everclaw.env.EVERCLAW_API_KEY` → the generated `API_KEY`
+
+Append the Everclaw sync task to `HEARTBEAT.md` in the workspace (create if missing). Add this block if it's not already present:
 
 ```
 ## Everclaw vault sync
@@ -40,11 +61,54 @@ RESPONSE=$(curl -s -X POST "https://everclaw.chong-eae.workers.dev/v1/provision"
 - Only push files that changed since last sync
 ```
 
-4. Do an initial backup — read each of the standard files that exist locally and push them to the vault.
+Report: "Configuration saved"
 
-5. Confirm the vault is reachable: `curl -s "https://everclaw.chong-eae.workers.dev/health"` — expect `{"ok":true}`.
+### Step 4: Initial backup (batch upload)
 
-6. Tell the user their vault is ready and show them their `vaultId`. Remind them: **"Save this API key somewhere safe — it's the only way to recover your memory on a new device. Your data is encrypted at rest in storage."**
+Report: "Backing up files..."
+
+Collect all existing standard files and upload them in a single batch request:
+
+```bash
+# Build JSON array of files that exist
+FILES='{"files":['
+# For each file that exists, add: {"path":"MEMORY.md","content":"...","contentType":"text/markdown"}
+# Close array
+FILES+=']}'
+
+curl -s -X POST "https://everclaw.chong-eae.workers.dev/v1/vault/_batch" \
+  -H "Authorization: Bearer $EVERCLAW_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$FILES"
+```
+
+The batch endpoint returns:
+- `results` — array of `{path, ok, size?, error?}` for each file
+- `uploaded` — count of successful uploads
+- `failed` — count of failed uploads
+- `usage` — current vault usage in bytes
+- `quota` — vault quota in bytes
+
+Report: "{uploaded}/{total} files backed up ({usage_kb} KB used)"
+
+### Step 5: Verify and show summary
+
+Confirm the vault is reachable:
+```bash
+curl -s "https://everclaw.chong-eae.workers.dev/health"
+```
+
+Display the final summary to the user:
+
+```
+✓ Vault ready: {vaultId}
+✓ Files backed up: {count} ({usage_kb} KB / {quota_mb} MB)
+
+⚠️  SAVE THIS API KEY — it cannot be recovered:
+    {API_KEY}
+
+Your memory will sync automatically. Run /everclaw anytime to check status.
+```
 
 ## Files to sync
 
@@ -109,12 +173,68 @@ All requests require: `Authorization: Bearer $EVERCLAW_API_KEY`
 | Delete | `DELETE` | `/v1/vault/{path}` | Returns `{"ok":true,"deleted":"..."}`. 404 if missing. |
 | Status | `GET` | `/v1/vault/status` | Returns `vaultId`, `fileCount`, `usage`, `quota`, and `lastSynced`. |
 | Purge | `DELETE` | `/v1/vault/` | Deletes all files in the vault and resets usage to 0. |
+| Batch | `POST` | `/v1/vault/_batch` | Upload up to 20 files (5MB total). See batch format below. |
 
 Nested paths work: `memory/2026-02-02.md`, `memory/heartbeat-state.json`, etc.
 
+### Batch upload format
+
+```json
+// Request
+{
+  "files": [
+    { "path": "MEMORY.md", "content": "...", "contentType": "text/markdown" },
+    { "path": "SOUL.md", "content": "...", "contentType": "text/markdown" }
+  ]
+}
+
+// Response
+{
+  "ok": true,
+  "results": [
+    { "path": "MEMORY.md", "ok": true, "size": 1234 },
+    { "path": "SOUL.md", "ok": true, "size": 567 }
+  ],
+  "uploaded": 2,
+  "failed": 0,
+  "usage": 1801,
+  "quota": 52428800
+}
+```
+
+Limits: max 20 files, max 5MB total per batch.
+
+## Error handling
+
+All error responses include `code` and `action` fields to help with recovery:
+
+```json
+{
+  "ok": false,
+  "error": "Human-readable message",
+  "code": "ERROR_CODE",
+  "action": "What to do next"
+}
+```
+
+| Code | Meaning | Action |
+|------|---------|--------|
+| `INVALID_API_KEY` | API key not recognized | Re-run /everclaw to provision a new vault |
+| `QUOTA_EXCEEDED` | Storage limit reached | Delete unused files with DELETE /v1/vault/{path} |
+| `RATE_LIMITED` | Too many requests | Wait a minute and try again |
+| `FILE_NOT_FOUND` | File doesn't exist | File may not have been backed up yet |
+| `DECRYPT_FAILED` | Decryption error | Data corrupted or wrong API key |
+| `VALIDATION_ERROR` | Invalid request format | Check the request body structure |
+| `BATCH_LIMIT_EXCEEDED` | Batch too large | Split into batches of 20 files / 5MB |
+
+**When you encounter an error:**
+1. Report the error message and code to the user
+2. Follow the suggested action
+3. If `INVALID_API_KEY`, offer to re-provision the vault
+
 ## Guardrails
 
-- Never log or display the full `EVERCLAW_API_KEY`. Show only the last 8 characters if needed.
+- Never log or display the full `EVERCLAW_API_KEY`. Show only the last 8 characters if needed for debugging.
 - Do not store secrets or credentials in the vault.
 - Local files are the source of truth. Only restore from vault when local files are missing.
 - If a request returns 401, the API key may be invalid. Offer to re-provision.

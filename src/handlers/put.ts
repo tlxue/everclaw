@@ -14,12 +14,22 @@ export async function handlePut(c: Context<HonoEnv>) {
 
   const contentLength = parseInt(c.req.header("Content-Length") || "0", 10);
   if (contentLength > quotaBytes) {
-    throw new VaultError(413, "Upload exceeds vault quota");
+    throw new VaultError(
+      413,
+      "Upload exceeds vault quota",
+      "QUOTA_EXCEEDED",
+      "Delete unused files with DELETE /v1/vault/{path}",
+    );
   }
 
   const body = await c.req.arrayBuffer();
   if (body.byteLength > quotaBytes) {
-    throw new VaultError(413, "Upload exceeds vault quota");
+    throw new VaultError(
+      413,
+      "Upload exceeds vault quota",
+      "QUOTA_EXCEEDED",
+      "Delete unused files with DELETE /v1/vault/{path}",
+    );
   }
 
   const contentType = c.req.header("Content-Type") || "application/octet-stream";
@@ -37,7 +47,12 @@ export async function handlePut(c: Context<HonoEnv>) {
   const oldSize = existing?.size ?? 0;
 
   if (currentUsage + storedSize - oldSize > quotaBytes) {
-    throw new VaultError(413, "Vault storage quota exceeded");
+    throw new VaultError(
+      413,
+      "Vault storage quota exceeded",
+      "QUOTA_EXCEEDED",
+      "Delete unused files with DELETE /v1/vault/{path}",
+    );
   }
 
   await c.env.VAULT_BUCKET.put(key, encrypted, {

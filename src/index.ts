@@ -10,6 +10,7 @@ import { handleDelete } from "./handlers/delete";
 import { handlePurge } from "./handlers/purge";
 import { handleStatus } from "./handlers/status";
 import { handleProvision } from "./handlers/provision";
+import { handleBatch } from "./handlers/batch";
 
 type HonoEnv = { Bindings: Env; Variables: { vault: VaultContext } };
 
@@ -30,7 +31,12 @@ app.post("/v1/provision", async (c, next) => {
   const count = parseInt(raw || "0", 10);
 
   if (count >= maxRequests) {
-    throw new VaultError(429, "Too many requests. Try again later.");
+    throw new VaultError(
+      429,
+      "Too many provision requests. Try again later.",
+      "RATE_LIMITED",
+      "Wait a minute and try again",
+    );
   }
 
   await c.env.API_KEYS.put(rateLimitKey, String(count + 1), {
@@ -46,6 +52,7 @@ vault.use("*", auth);
 vault.get("/", handleList);
 vault.get("/status", handleStatus);
 vault.delete("/", handlePurge);
+vault.post("/_batch", handleBatch);
 vault.get("/:path{.+}", handleGet);
 vault.put("/:path{.+}", handlePut);
 vault.delete("/:path{.+}", handleDelete);
@@ -57,7 +64,13 @@ app.notFound((c) => c.json({ ok: false, error: "Not found" }, 404));
 
 app.onError((err, c) => {
   if (err instanceof VaultError) {
-    return c.json({ ok: false, error: err.message }, err.status as any);
+    const response: { ok: false; error: string; code?: string; action?: string } = {
+      ok: false,
+      error: err.message,
+    };
+    if (err.code) response.code = err.code;
+    if (err.action) response.action = err.action;
+    return c.json(response, err.status as any);
   }
   console.error(err);
   return c.json({ ok: false, error: "Internal server error" }, 500);

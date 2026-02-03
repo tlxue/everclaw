@@ -32,10 +32,20 @@ export async function handleProvision(c: Context<HonoEnv>) {
 
   if (body.apiKey !== undefined) {
     if (typeof body.apiKey !== "string" || body.apiKey.length !== 67 || !body.apiKey.startsWith("ec-")) {
-      return c.json({ ok: false, error: "API key must be 67 characters: 'ec-' followed by 64 hex characters" }, 400);
+      return c.json({
+        ok: false,
+        error: "API key must be 67 characters: 'ec-' followed by 64 hex characters",
+        code: "VALIDATION_ERROR",
+        action: "Generate a valid key with: ec-$(openssl rand -hex 32)",
+      }, 400);
     }
     if (!/^[0-9a-f]{64}$/.test(body.apiKey.slice(3))) {
-      return c.json({ ok: false, error: "API key hex portion must be lowercase hex (0-9, a-f)" }, 400);
+      return c.json({
+        ok: false,
+        error: "API key hex portion must be lowercase hex (0-9, a-f)",
+        code: "VALIDATION_ERROR",
+        action: "Generate a valid key with: ec-$(openssl rand -hex 32)",
+      }, 400);
     }
   }
 
@@ -48,5 +58,14 @@ export async function handleProvision(c: Context<HonoEnv>) {
   await c.env.API_KEYS.put(`key:${keyHash}`, metadata);
   await c.env.API_KEYS.put(`usage:${vaultId}`, "0");
 
-  return c.json({ ok: true, vaultId, apiKey }, 201);
+  const quotaBytes = parseInt(c.env.VAULT_QUOTA_MB || "50", 10) * 1024 * 1024;
+
+  return c.json({
+    ok: true,
+    vaultId,
+    apiKey,
+    quota: quotaBytes,
+    usage: 0,
+    securityReminder: "Save this API key now — it cannot be recovered if lost.",
+  }, 201);
 }

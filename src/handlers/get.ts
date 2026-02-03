@@ -12,7 +12,12 @@ export async function handleGet(c: Context<HonoEnv>) {
 
   const object = await c.env.VAULT_BUCKET.get(key);
   if (!object) {
-    throw new VaultError(404, `Not found: ${path}`);
+    throw new VaultError(
+      404,
+      `Not found: ${path}`,
+      "FILE_NOT_FOUND",
+      "File may not have been backed up yet",
+    );
   }
 
   const encrypted = await object.arrayBuffer();
@@ -20,7 +25,12 @@ export async function handleGet(c: Context<HonoEnv>) {
   try {
     plaintext = await decrypt(vault.apiKey, encrypted);
   } catch {
-    throw new VaultError(500, "Failed to decrypt file — data may be corrupted");
+    throw new VaultError(
+      500,
+      "Failed to decrypt file — data may be corrupted",
+      "DECRYPT_FAILED",
+      "Data corrupted or wrong API key",
+    );
   }
 
   const contentType = object.customMetadata?.contentType || "application/octet-stream";

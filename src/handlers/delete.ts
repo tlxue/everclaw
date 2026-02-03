@@ -11,7 +11,12 @@ export async function handleDelete(c: Context<HonoEnv>) {
 
   const head = await c.env.VAULT_BUCKET.head(key);
   if (!head) {
-    throw new VaultError(404, `Not found: ${path}`);
+    throw new VaultError(
+      404,
+      `Not found: ${path}`,
+      "FILE_NOT_FOUND",
+      "File may have already been deleted",
+    );
   }
 
   await c.env.VAULT_BUCKET.delete(key);
