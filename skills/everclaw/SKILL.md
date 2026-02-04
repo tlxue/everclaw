@@ -1,9 +1,12 @@
 ---
 name: everclaw
-version: 0.3.2
 description: Encrypted cloud memory for your agent. Your API key is generated on your device and never stored on the server — only a SHA-256 hash. Everything your agent saves is AES-256-GCM encrypted at rest before storage. The server handles plaintext transiently during requests. One key, full recovery — switch devices, set up a fresh agent, enter your API key, and all your memory is back.
-user-invocable: true
-metadata: {"openclaw":{"emoji":"🦞","primaryEnv":"EVERCLAW_API_KEY"}}
+metadata:
+  version: "0.3.3"
+  openclaw:
+    emoji: "🦞"
+    primaryEnv: EVERCLAW_API_KEY
+    user-invocable: true
 ---
 
 # Everclaw Vault
