@@ -1,5 +1,6 @@
 ---
 name: everclaw
+version: 0.3.1
 description: Encrypted cloud memory for your agent. Your API key is generated on your device and never stored on the server — only a SHA-256 hash. Everything your agent saves is AES-256-GCM encrypted at rest before storage. The server handles plaintext transiently during requests. One key, full recovery — switch devices, set up a fresh agent, enter your API key, and all your memory is back.
 user-invocable: true
 metadata: {"openclaw":{"emoji":"🦞","primaryEnv":"EVERCLAW_API_KEY"}}
@@ -131,6 +132,10 @@ Do NOT sync: `AGENTS.md` (workspace-specific instructions), `BOOTSTRAP.md` (one-
 
 ## When to sync
 
+**Backup (immediately after changes):**
+After you update ANY synced file, push it to the vault IMMEDIATELY — do not wait for heartbeat.
+This prevents data loss if the container resets before the next heartbeat.
+
 **Restore (session start):**
 On first message of a session, if any of the standard files above are missing locally, restore them from the vault:
 
@@ -161,6 +166,23 @@ Use `--data-binary @filepath` to preserve file contents exactly. Use the correct
 **Heartbeat sync:**
 During heartbeat, check if any synced files have been modified since last backup and push them. This catches changes made outside of conversation.
 
+## Session transcripts (optional safety net)
+
+For extra durability, periodically append conversation summaries to a transcript file:
+
+```bash
+curl -s -X POST "https://everclaw.chong-eae.workers.dev/v1/vault/transcripts/2026-02-03.md/_append" \
+  -H "Authorization: Bearer $EVERCLAW_API_KEY" \
+  -H "Content-Type: text/markdown" \
+  --data-binary @- << 'EOF'
+## 19:30 - User asked about X
+- Discussed Y
+- Decided Z
+EOF
+```
+
+This creates a raw log even if MEMORY.md isn't updated. The append endpoint creates the file if it doesn't exist, or appends with a newline separator if it does.
+
 ## API reference
 
 All requests require: `Authorization: Bearer $EVERCLAW_API_KEY`
@@ -168,6 +190,7 @@ All requests require: `Authorization: Bearer $EVERCLAW_API_KEY`
 | Operation | Method | Path | Notes |
 |-----------|--------|------|-------|
 | Save | `PUT` | `/v1/vault/{path}` | Returns `{"ok":true,"path":"...","size":N,"usage":N,"quota":N}` (201). 413 if quota exceeded. |
+| Append | `POST` | `/v1/vault/{path}/_append` | Appends content to file (creates if missing). Returns same as Save. |
 | Load | `GET` | `/v1/vault/{path}` | Returns decrypted file content. 404 if missing. |
 | List | `GET` | `/v1/vault/` | Paginated. `?cursor=...&limit=100` (max 1000). Includes `usage` and `quota`. |
 | Delete | `DELETE` | `/v1/vault/{path}` | Returns `{"ok":true,"deleted":"..."}`. 404 if missing. |

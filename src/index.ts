@@ -11,6 +11,7 @@ import { handlePurge } from "./handlers/purge";
 import { handleStatus } from "./handlers/status";
 import { handleProvision } from "./handlers/provision";
 import { handleBatch } from "./handlers/batch";
+import { handleAppend } from "./handlers/append";
 
 type HonoEnv = { Bindings: Env; Variables: { vault: VaultContext } };
 
@@ -53,6 +54,7 @@ vault.get("/", handleList);
 vault.get("/status", handleStatus);
 vault.delete("/", handlePurge);
 vault.post("/_batch", handleBatch);
+vault.post("/:path{.+}/_append", handleAppend);
 vault.get("/:path{.+}", handleGet);
 vault.put("/:path{.+}", handlePut);
 vault.delete("/:path{.+}", handleDelete);
